@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulação de alagamentos - Mapa Interativo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f1f8fb; }
+   
+    h1 { margin: 0; }
+    #map { height: 500px; width: 100%; max-width: 900px; margin: 2em auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.09);}
+    #info { max-width: 900px; margin: 1em auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); padding: 1.5em; font-size: 1.2em;}
+    .danger { color: #e63946; font-weight: bold; }
+    .safe { color: #43aa8b; font-weight: bold; }
+    @media (max-width: 600px) {
+      #map, #info { width: 98vw; min-width: unset; }
+      #map { height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+  <nav style="background: #0077b6; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+    <div style="max-width: 1100px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+      <span style="color: #fff; font-size: 1.7em; font-weight: bold; padding: 0.7em 1em;">Prevenção de alagamentos</span>
+      <ul style="list-style: none; display: flex; margin: 0; padding: 0;">
+        <li><a href="index.html" style="display: block; padding: 1.2em 1.5em; color: #fff; text-decoration: none; font-weight: 500; transition: background 0.2s;">Home</a></li>
+        <li><a href="simulacao.html" style="display: block; padding: 1.2em 1.5em; color: #fff; text-decoration: none; font-weight: 500; transition: background 0.2s;">Simulação</a></li>
+        <li><a href="prevencao.html" style="display: block; padding: 1.2em 1.5em; color: #fff; text-decoration: none; font-weight: 500; transition: background 0.2s;">Prevenção</a></li>
+        
+        <li><a href="faleconosco.html" style="display: block; padding: 1.2em 1.5em; color: #fff; text-decoration: none; font-weight: 500; transition: background 0.2s;">Fale conosco</a></li>
+      </ul>
+    </div>
+  </nav>
+</header>
+<div id="map"></div>
+<div id="info">
+  <em>Clique em qualquer ponto do mapa para ver a previsão.</em>
+</div>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+// Inicialização do mapa
+var map = L.map('map').setView([-14.235004, -51.92528], 4); // Centro do Brasil
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+var marker;
+
+// Função para buscar previsão do tempo (exemplo fictício/simulação)
+// Substitua por chamada real à API de clima se desejar
+async function getClimateAndFloodRisk(lat, lon) {
+  // Exemplo usando Open-Meteo para previsão do tempo (sem chave)
+  // https://open-meteo.com/
+  const resp = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=precipitation_probability,precipitation,rain,showers,weathercode&forecast_days=1&timezone=America/Sao_Paulo`);
+  const data = await resp.json();
+
+  // Simulação de risco de alagamento (simplificado para exemplo)
+  const rain = data.hourly.rain ? Math.max(...data.hourly.rain) : 0;
+  const precipProb = data.hourly.precipitation_probability ? Math.max(...data.hourly.precipitation_probability) : 0;
+  let risk = "Baixo";
+  let riskClass = "safe";
+  if (rain >= 30 || precipProb > 90) { risk = "Alto"; riskClass = "danger"; }
+  else if (rain >= 10 || precipProb > 60) { risk = "Moderado"; riskClass = "danger"; }
+
+  // Pega descrição básica do tempo atual
+  let weatherDesc = "Tempo indefinido";
+  if (data.current_weather) {
+    const weatherCodes = {
+      0: "Céu limpo",
+      1: "Principalmente limpo",
+      2: "Parcialmente nublado",
+      3: "Nublado",
+      45: "Névoa",
+      48: "Névoa gelada",
+      51: "Chuvisco leve",
+      53: "Chuvisco moderado",
+      55: "Chuvisco denso",
+      61: "Chuva leve",
+      63: "Chuva moderada",
+      65: "Chuva forte",
+      71: "Neve leve",
+      73: "Neve moderada",
+      75: "Neve forte",
+      80: "Aguaceiros leves",
+      81: "Aguaceiros moderados",
+      82: "Aguaceiros fortes",
+      95: "Trovoada",
+      96: "Trovoada com granizo leve",
+      99: "Trovoada com granizo forte"
+    };
+    weatherDesc = weatherCodes[data.current_weather.weathercode] || "Tempo indefinido";
+  }
+
+  return {
+    weather: weatherDesc,
+    rain: rain,
+    precipProb: precipProb,
+    risk: risk,
+    riskClass: riskClass
+  }
+}
+
+// Evento de clique no mapa
+map.on('click', async function(e) {
+  const lat = e.latlng.lat.toFixed(5);
+  const lon = e.latlng.lng.toFixed(5);
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([lat, lon]).addTo(map);
+  document.getElementById('info').innerHTML = "<em>Carregando previsão...</em>";
+
+  try {
+    const res = await getClimateAndFloodRisk(lat, lon);
+    document.getElementById('info').innerHTML = `
+      <strong>Local selecionado:</strong> [${lat}, ${lon}]<br>
+      <strong>Clima atual:</strong> ${res.weather}<br>
+      <strong>Precipitação máxima prevista nas próximas horas:</strong> ${res.rain} mm<br>
+      <strong>Probabilidade máxima de chuva:</strong> ${res.precipProb}%<br>
+      <strong>Risco de alagamento:</strong> <span class="${res.riskClass}">${res.risk}</span>
+    `;
+  } catch (err) {
+    document.getElementById('info').innerHTML = "<span class='danger'>Não foi possível obter a previsão para este local.</span>";
+  }
+});
+
+</script>
+    <footer>
+  <div style="max-width: 900px; margin: 0 auto; padding: 2em 1em; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #fff; box-shadow: 0 -2px 12px rgba(0,102,255,0.05); border-radius: 14px 14px 0 0;">
+    <div style="flex: 1 1 250px; min-width: 220px; margin-bottom: 1em;">
+      <strong style="color: #0066ff; font-size: 1.13em;">Contato:</strong><br>
+      <span style="margin-top: .4em; display: block;">Tel: (11) 91234-5678</span>
+    </div>
+    <div style="flex: 2 1 340px; min-width: 220px; margin-bottom: 1em;">
+      <strong style="color: #0066ff; font-size: 1.13em;">Onde estamos:</strong><br>
+      FIAP - Paulista, Av. Paulista, 1106 - 7º andar<br>
+      Bela Vista, São Paulo - SP, 01311-000
+    </div>
+    <div style="flex: 1 1 180px; text-align: right; min-width: 180px;">
+      <a href="faleconosco.html" style="background: linear-gradient(90deg, #00c3ff 0%, #0066ff 100%); color: #fff; padding: 0.9em 1.7em; border-radius: 9px; text-decoration: none; font-weight: 600; box-shadow: 0 2px 10px rgba(0,102,255,0.12); transition: background 0.2s, transform 0.2s;">Fale conosco</a>
+    </div>
+  </div>
+  <div style="text-align:center; color:#888; font-size: 1em; padding: 1.1em 0 0.6em 0;">
+    &copy; 2025 Prevenção de alagamentos. Todos os direitos reservados.
+  </div>
+</footer>
+</body>
+</html>
